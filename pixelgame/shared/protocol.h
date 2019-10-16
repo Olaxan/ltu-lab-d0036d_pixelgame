@@ -2,7 +2,7 @@
 
 constexpr int max_name_len = 32;
 
-enum object_desc
+enum class object_desc
 {
 	human,
 	non_human,
@@ -14,15 +14,15 @@ inline const char* to_string(const object_desc e)
 {
 	switch (e)
 	{
-	case human: return "human";
-	case non_human: return "non human";
-	case vehicle: return "vehicle";
-	case static_object: return "static object";
+	case object_desc::human: return "human";
+	case object_desc::non_human: return "non human";
+	case object_desc::vehicle: return "vehicle";
+	case object_desc::static_object: return "static object";
 	default: return "unknown";
 	}
 }
 
-enum object_form
+enum class object_form
 {
 	cube,
 	sphere,
@@ -34,10 +34,10 @@ inline const char* to_string(const object_form e)
 {
 	switch (e)
 	{
-	case cube: return "cube";
-	case sphere: return "sphere";
-	case pyramid: return "pyramid";
-	case cone: return "cone";
+	case object_form::cube: return "cube";
+	case object_form::sphere: return "sphere";
+	case object_form::pyramid: return "pyramid";
+	case object_form::cone: return "cone";
 	default: return "unknown";
 	}
 }
@@ -56,7 +56,7 @@ struct draw_packet
 };
 
 // Message head
-enum msg_type
+enum class msg_type
 {
 	join, // Client joining game at server
 	leave, // Client leaving game
@@ -90,7 +90,7 @@ struct leave_msg
 };
 
 // Message type Change (Server -> Client)
-enum change_type
+enum class change_type
 {
 	new_player,
 	player_leave,
@@ -126,7 +126,7 @@ struct new_player_position_msg
 };
 
 // Messages of type Event (Client -> Server)
-enum event_type
+enum class event_type
 {
 	move
 };

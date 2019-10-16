@@ -61,13 +61,13 @@ int main()
 						asio::error_code err;
 						client_mgr manager(socket, canvas_addr, canvas_port);
 						
-						auto player = client(name, form, human);
+						auto player = client(name, form, object_desc::human);
 						
 						if (manager.join(player, err))
 						{
 							std::cout << "Joined successfully!" << std::endl;
-							manager.start();
-							return 0;
+							if (manager.start())
+								return 0;
 						}
 						else
 						{

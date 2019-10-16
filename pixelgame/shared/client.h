@@ -15,8 +15,13 @@ struct client
 	explicit client(new_player_msg& msg)
 	: position(), form(msg.form), desc(msg.desc)
 	{
-		std::copy(msg.name, msg.name + max_name_len, name);
-		//memcpy_s(name, max_name_len, msg.name, max_name_len);
+		std::memcpy(name, msg.name, max_name_len);
+	}
+
+	explicit client(join_msg& msg)
+		: position(), form(msg.form), desc(msg.desc)
+	{
+		std::memcpy(name, msg.name, max_name_len);
 	}
 
 	coordinate position;
@@ -28,10 +33,10 @@ struct client
 	{
 		switch (form)
 		{
-		case cube: return 16711680;
-		case sphere: return 65280;
-		case pyramid: return 16776960;
-		case cone: return 255;
+		case object_form::cube: return 16711680;
+		case object_form::sphere: return 65280;
+		case object_form::pyramid: return 16776960;
+		case object_form::cone: return 255;
 		default: return 16777215;
 		}
 	}

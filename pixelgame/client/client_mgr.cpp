@@ -6,23 +6,23 @@
 #include <iostream>
 #include <thread>
 
-client_mgr::directions client_mgr::get_dir(const std::string& input)
+directions client_mgr::get_dir(const std::string& input)
 {
 	if (input == "up")
-		return up;
+		return directions::up;
 	else if (input == "down")
-		return down;
+		return directions::down;
 	else if (input == "left")
-		return left;
+		return directions::left;
 	else if (input == "right")
-		return right;
+		return directions::right;
 
-	return none;
+	return directions::none;
 }
 
 client_mgr::client_mgr(asio::ip::tcp::socket& endpoint, std::string canvas_address, std::string canvas_service)
 	: endpoint_(std::move(endpoint)), canvas_address_(std::move(canvas_address)), canvas_service_(std::move(canvas_service)),
-	sequence_(0), id_(0), is_running_(false), state_(idle) { }
+	sequence_(0), id_(0), is_running_(false), state_(socket_state::idle) { }
 
 bool client_mgr::is_ready() const
 {
@@ -91,7 +91,6 @@ bool client_mgr::start()
 	{
 		// Create leave message and send to server
 		// No need to listen for reply
-
 		std::cout << "Disconnecting..." << std::endl;
 		leave_msg leave{ msg_head{sizeof leave_msg, sequence_, id_, msg_type::leave} };
 		endpoint_.send(asio::buffer(&leave, leave.head.length));
@@ -117,7 +116,7 @@ void client_mgr::update()
 void client_mgr::receive()
 {
 
-	state_ = waiting;
+	state_ = socket_state::waiting;
 
 	asio::streambuf received_buffer;
 	std::istream data_stream(&received_buffer);
@@ -129,7 +128,7 @@ void client_mgr::receive()
 		// Then commit to buffer
 		endpoint_.receive(received_buffer.prepare(header_length));
 		received_buffer.commit(header_length);
-		state_ = header_received;
+		state_ = socket_state::header_received;
 	}
 	catch (asio::system_error & e)
 	{
@@ -146,6 +145,7 @@ void client_mgr::receive()
 	change_msg msg{};
 	data_stream.read(reinterpret_cast<char*>(&msg), header_length);
 
+	sequence_ = msg.head.seq_no;
 	const unsigned int message_id = msg.head.id;
 	const unsigned int message_length = msg.head.length;
 	const unsigned int remaining_length = message_length - header_length;
@@ -156,7 +156,7 @@ void client_mgr::receive()
 		// Receive rest of message and commit to buffer
 		endpoint_.receive(received_buffer.prepare(remaining_length));
 		received_buffer.commit(remaining_length);
-		state_ = message_received;
+		state_ = socket_state::message_received;
 	}
 	catch (asio::system_error & e)
 	{
@@ -171,7 +171,7 @@ void client_mgr::receive()
 
 	switch (msg.type)
 	{
-	case new_player:
+	case change_type::new_player:
 	{
 		new_player_msg np{};
 		data_stream.read(reinterpret_cast<char*>(&np.desc), remaining_length);
@@ -183,7 +183,7 @@ void client_mgr::receive()
 
 		break;
 	}
-	case player_leave:
+	case change_type::player_leave:
 	{
 		player_leave_msg pl{};
 		data_stream.read(reinterpret_cast<char*>(&pl.msg), remaining_length);
@@ -195,7 +195,7 @@ void client_mgr::receive()
 			players_.erase(player_iterator);
 		}
 	}
-	case new_player_position:
+	case change_type::new_player_position:
 	{
 		new_player_position_msg pp{};
 		data_stream.read(reinterpret_cast<char*>(&pp.pos), remaining_length);
@@ -213,7 +213,7 @@ void client_mgr::receive()
 	}
 
 	draw();
-	state_ = idle;
+	state_ = socket_state::idle;
 }
 
 void client_mgr::input()
@@ -252,7 +252,7 @@ void client_mgr::input()
 			if (com.size() > 1)
 			{
 				const directions dir = get_dir(com[1]);
-				if (dir != none)
+				if (dir != directions::none)
 					move(dir, m_count);
 			}
 			else
@@ -276,18 +276,17 @@ void client_mgr::move(const directions dir, const int count)
 	{
 
 		// Hold until update thread is ready for new message
-		while (state_ != waiting) {}
+		while (state_ != socket_state::waiting) {}
 
 		coordinate cord = it->second.position;
-		cord.x += (dir == right) - (dir == left);
-		cord.y += (dir == down) - (dir == up);
+		cord.x += (dir == directions::right) - (dir == directions::left);
+		cord.y += (dir == directions::down) - (dir == directions::up);
 
 		move_event msg_move
 		{
 			event_msg
 			{
-				msg_head{sizeof move_event, sequence_, id_, event },
-				event_type::move
+				msg_head{sizeof move_event, sequence_, id_, msg_type::event }, event_type::move
 			},
 			coordinate(cord),
 			coordinate {0, 0}
@@ -295,7 +294,7 @@ void client_mgr::move(const directions dir, const int count)
 
 		endpoint_.send(asio::buffer(&msg_move, msg_move.event.head.length));
 		sequence_++;
-		state_ = hold;
+		state_ = socket_state::hold;
 	}
 }
 

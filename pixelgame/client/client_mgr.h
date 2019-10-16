@@ -7,27 +7,27 @@
 #include <string>
 #include <map>
 
+enum class directions
+{
+	up,
+	down,
+	left,
+	right,
+	none
+};
+
+enum class socket_state
+{
+	waiting,
+	header_received,
+	message_received,
+	hold,
+	idle
+};
+
 class client_mgr
 {
 private:
-
-	enum directions
-	{
-		up,
-		down,
-		left,
-		right,
-		none
-	};
-
-	enum socket_state
-	{
-		waiting,
-		header_received,
-		message_received,
-		hold,
-		idle
-	};
 	
 	asio::ip::tcp::socket endpoint_;
 	std::map<int, client> players_;

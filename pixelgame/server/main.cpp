@@ -16,6 +16,28 @@
 constexpr unsigned int port_range_begin = 49152;
 constexpr unsigned int port_range_end = 49160;
 constexpr unsigned int max_clients = 64;
+constexpr unsigned int buffer_size = 1024;
+
+unsigned int id = 4;
+std::map<unsigned int, client> players;
+std::map<unsigned int, unsigned int> sequence;
+
+int summary(int socket_descriptor)
+{
+	char bytes[players.size() * (sizeof(new_player_msg) + sizeof(new_player_position_msg))];
+	
+	for (const auto& player : players)
+	{
+		new_player_msg first
+		{
+			change_msg
+			{
+				msg_head {sizeof(change_msg), change_type(change_type::new_player)},
+				
+			}
+		}
+	}
+}
 
 int main()
 {
@@ -23,13 +45,8 @@ int main()
 	int master_socket, addrlen, new_socket, client_socket[max_clients], i, valread, sd;
 	struct sockaddr_in address {};
 
-	unsigned int id = 4;
-	std::map<unsigned int, client> players;
-
-	char message[] = "Server version 0.1";
-
 	// Receive data buffer
-	char buffer[1025];
+	char buffer[buffer_size + 1];
 
 	fd_set readfds;
 
@@ -59,7 +76,7 @@ int main()
 	address.sin_addr.s_addr = INADDR_ANY;
 	address.sin_port = htons(port);
 
-	// Attempt to bind socket - repeat 'i' times if not successful
+	// Attempt to bind socket - test all sockets in range until successful, or fail
 	while (bind(master_socket, reinterpret_cast<struct sockaddr*>(&address), sizeof(address)) < 0)
 	{
 		if (port > port_range_end)
@@ -121,19 +138,17 @@ int main()
 				exit(EXIT_FAILURE);
 			}
 
-			printf("New connection - socket fd %d, ip: %s, port: %d \n" , new_socket , inet_ntoa(address.sin_addr) , ntohs(address.sin_port));
+			printf("New connection - socket fd %d, ip %s, port %d \n" , new_socket , inet_ntoa(address.sin_addr) , ntohs(address.sin_port));
 			
-			if (send(new_socket, &message, sizeof message, 0) != sizeof message)
-				perror("Transmission error");
-			else 
-				puts("Welcome message sent successfully");
+			/*if (send(new_socket, &message, sizeof message, 0) != sizeof message)
+				perror("Transmission error");*/
 
 			for (i = 0; i < max_clients; i++)
 			{
 				if (client_socket[i] == 0)
 				{
 					client_socket[i] = new_socket;
-					printf("Adding to list of sockets as %d\n", i);
+					printf("Socket number %d \n", i);
 
 					break;
 				}
@@ -148,21 +163,69 @@ int main()
 			if (FD_ISSET(sd, &readfds))
 			{
 
-				if ((valread = read(sd, buffer, 1024)) == 0)
+				if ((valread = read(sd, buffer, buffer_size)) == 0)
 				{
 					getpeername(sd, reinterpret_cast<struct sockaddr*>(&address), 
 						reinterpret_cast<socklen_t*>(&addrlen));
-					printf("Host disconnected , ip %s , port %d \n",
+					printf("Host disconnected, ip %s, port %d \n",
 						inet_ntoa(address.sin_addr), ntohs(address.sin_port));
 
 					close(sd);
 					client_socket[i] = 0;
 				}
-				else
+				else if (valread > -1)
 				{
-					printf("Message from %s \n", inet_ntoa(address.sin_addr));
+					printf("Message from %s (%d bytes) \n", inet_ntoa(address.sin_addr), valread);
+
+					msg_head head{};
+					std::memcpy(&head, buffer, valread);
+
+					switch (head.type)
+					{
+						case msg_type::join:
+						{
+							join_msg msg{};
+							std::memcpy(&msg, buffer, sizeof(join_msg));
+							printf("Player %s joined, desc %d, form %d \n", msg.name, msg.desc, msg.form);
+
+							msg_head response{ sizeof(msg_head), 1, id, msg_type::join };
+							if (send(sd, &response, sizeof(msg_head), 0) == sizeof(msg_head))
+							{
+								players[id] = client(msg);
+								sequence[id] = 1;
+								id++;
+							}
+							summary(sd);
+							break;
+						}
+						case msg_type::leave:
+						{
+							leave_msg msg{};
+							std::memcpy(&msg, buffer, sizeof(leave_msg));
+							auto it = players.find(msg.head.id);
+							if (it != players.end())
+							{
+								printf("Player %s (id %d) disconnected \n", it->second.name, it->first);
+								players.erase(it);
+							}
+							break;
+						}
+						case msg_type::change:
+						{
+							break;
+						}
+						case msg_type::event:
+						{
+							break;
+						}
+						case msg_type::text_message:
+						{
+							break;
+						}
+						default: ;
+					}
+
 					buffer[valread] = '\0';
-					send(sd, buffer, strlen(buffer), 0);
 				}
 			}
 		}
