@@ -9,13 +9,14 @@
 #include <netinet/in.h>  
 #include <ctime>
 
-constexpr unsigned int port = 49152;
-constexpr unsigned int max_bind_attempts = 5;
+constexpr unsigned int port_range_begin = 49152;
+constexpr unsigned int port_range = 5;
 constexpr unsigned int max_clients = 64;
 
 int main()
 {
 	int opt = true;
+	int port = port_range_begin;
 	int master_socket, addrlen, new_socket, client_socket[30], i, valread, sd;
 	struct sockaddr_in address {};
 
@@ -23,7 +24,7 @@ int main()
 
 	fd_set readfds;
 
-	char* message = "ECHO Daemon v1.0 \r\n";
+	char* message = "Pixelgame server 1.0\n";
 
 	for (i = 0; i < max_clients; i++)
 	{
@@ -50,13 +51,14 @@ int main()
 	int attempts = 0;
 	while (!(bind(master_socket, reinterpret_cast<struct sockaddr*>(&address), sizeof(address)) < 0))
 	{
-		if (attempts > max_bind_attempts)
+		if (attempts > port_range)
 		{
 			perror("Failed to bind port");
 			exit(EXIT_FAILURE);
 		}
-
-		address.sin_port++;
+		
+		port++;
+		address.sin_port = port;
 		attempts++;
 	}
 	
