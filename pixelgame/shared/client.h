@@ -15,7 +15,8 @@ struct client
 	explicit client(new_player_msg& msg)
 	: position(), form(msg.form), desc(msg.desc)
 	{
-		memcpy_s(name, max_name_len, msg.name, max_name_len);
+		std::copy(msg.name, msg.name + max_name_len, name);
+		//memcpy_s(name, max_name_len, msg.name, max_name_len);
 	}
 
 	coordinate position;

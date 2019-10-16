@@ -223,7 +223,7 @@ void client_mgr::input()
 	if (in_prompt.Show())
 	{
 		const std::string in_com = in_prompt.Value();
-		auto com = split(in_com, " \t\n\v\f\r");
+		auto com = split4(in_com, " \t\n\v\f\r");
 
 		if (com.empty())
 			return;
@@ -258,6 +258,8 @@ void client_mgr::input()
 			else
 				std::cout << "Invalid command syntax [move 'direction' ('count')]" << std::endl;
 		}
+		else if (com[0] == "info")
+			std::printf("Sequence %d, id %d\n", sequence_, id_);
 	}
 }
 
@@ -314,9 +316,9 @@ void client_mgr::draw() const
 		socket.send_to(asio::buffer(&clear, sizeof draw_packet), receiver_endpoint);
 
 		// Loop through players and send pixel data
-		for (auto it = players_.begin(); it != players_.end(); ++it)
+		for (const auto& player : players_)
 		{
-			const client* cli = &it->second;
+			const client* cli = &player.second;
 
 			draw_packet pixel
 			{

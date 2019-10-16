@@ -15,13 +15,7 @@
     </Filter>
   </ItemGroup>
   <ItemGroup>
-    <ClInclude Include="client.h">
-      <Filter>Header Files</Filter>
-    </ClInclude>
     <ClInclude Include="client_mgr.h">
-      <Filter>Header Files</Filter>
-    </ClInclude>
-    <ClInclude Include="protocol.h">
       <Filter>Header Files</Filter>
     </ClInclude>
     <ClInclude Include="utils.h">

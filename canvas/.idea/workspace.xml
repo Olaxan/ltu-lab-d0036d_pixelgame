@@ -12,6 +12,7 @@
   <component name="PropertiesComponent">
     <property name="WebServerToolWindowFactoryState" value="false" />
     <property name="aspect.path.notification.shown" value="true" />
+    <property name="last_opened_file_path" value="$PROJECT_DIR$" />
     <property name="node.js.detected.package.eslint" value="true" />
     <property name="node.js.detected.package.tslint" value="true" />
     <property name="node.js.path.for.package.eslint" value="project" />
@@ -120,6 +121,7 @@
       <workItem from="1570455955575" duration="547000" />
       <workItem from="1570713723287" duration="7915000" />
       <workItem from="1571064834250" duration="83000" />
+      <workItem from="1571227639757" duration="605000" />
     </task>
     <servers />
   </component>
