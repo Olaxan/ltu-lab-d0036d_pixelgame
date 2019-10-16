@@ -1,4 +1,4 @@
-﻿#include "client_mgr.h"
+#include "client_mgr.h"
 #include "userinput/uinput.h"
 #include "utils.h"
 
@@ -22,7 +22,7 @@ client_mgr::directions client_mgr::get_dir(const std::string& input)
 
 client_mgr::client_mgr(asio::ip::tcp::socket& endpoint, std::string canvas_address, std::string canvas_service)
 	: endpoint_(std::move(endpoint)), canvas_address_(std::move(canvas_address)), canvas_service_(std::move(canvas_service)),
-	  sequence_(0), id_(0), is_running_(false), state_(idle) { }
+	sequence_(0), id_(0), is_running_(false), state_(idle) { }
 
 bool client_mgr::is_ready() const
 {
@@ -31,28 +31,28 @@ bool client_mgr::is_ready() const
 
 bool client_mgr::join(client player, asio::error_code& err)
 {
-	
+
 	if (!endpoint_.is_open())
 		return false;
 
 	// Create join message
 	join_msg msg{ msg_head {sizeof join_msg, 0, 0, msg_type::join}, player.desc, player.form, 0 };
 	memcpy_s(msg.name, max_name_len, player.name, max_name_len);
-	
+
 	try
 	{
 		// Send join message to server
 		endpoint_.send(asio::buffer(&msg, msg.head.length));
 		sequence_ = 1;
 	}
-	catch (asio::system_error& e)
+	catch (asio::system_error & e)
 	{
 		err = e.code();
 		return false;
 	}
 
 	// Create join message response
-	msg_head response {};
+	msg_head response{};
 	try
 	{
 		// Retrieve response from server
@@ -61,7 +61,7 @@ bool client_mgr::join(client player, asio::error_code& err)
 			id_ = response.id;
 		else return false;
 	}
-	catch (asio::system_error& e)
+	catch (asio::system_error & e)
 	{
 		err = e.code();
 		return false;
@@ -75,12 +75,12 @@ bool client_mgr::start()
 
 	if (!is_ready())
 		return false;
-	
+
 	is_running_ = true;
-	
+
 	// Start update listener thread
 	update_listener_ = std::thread(&client_mgr::update, this);
-	
+
 	while (is_running_)
 	{
 		// Listen for user input
@@ -91,13 +91,13 @@ bool client_mgr::start()
 	{
 		// Create leave message and send to server
 		// No need to listen for reply
-		
+
 		std::cout << "Disconnecting..." << std::endl;
 		leave_msg leave{ msg_head{sizeof leave_msg, sequence_, id_, msg_type::leave} };
 		endpoint_.send(asio::buffer(&leave, leave.head.length));
 		id_ = sequence_ = 0;
 	}
-	catch (asio::system_error& e) { }
+	catch (asio::system_error & e) {}
 
 	update_listener_.detach();
 	return true;
@@ -118,7 +118,7 @@ void client_mgr::receive()
 {
 
 	state_ = waiting;
-	
+
 	asio::streambuf received_buffer;
 	std::istream data_stream(&received_buffer);
 	const unsigned int header_length = sizeof change_msg;
@@ -131,12 +131,12 @@ void client_mgr::receive()
 		received_buffer.commit(header_length);
 		state_ = header_received;
 	}
-	catch (asio::system_error& e)
+	catch (asio::system_error & e)
 	{
 		std::cerr << "Header transmission error: " << e.what() << std::endl;
 		return;
 	}
-	catch (std::length_error& le)
+	catch (std::length_error & le)
 	{
 		std::cerr << "Header length invalid (" << header_length << "): " << le.what() << std::endl;
 		return;
@@ -158,12 +158,12 @@ void client_mgr::receive()
 		received_buffer.commit(remaining_length);
 		state_ = message_received;
 	}
-	catch (asio::system_error& e)
+	catch (asio::system_error & e)
 	{
 		std::cerr << "Message transmission error: " << e.what() << std::endl;
 		return;
 	}
-	catch (std::length_error& le)
+	catch (std::length_error & le)
 	{
 		std::cerr << "Message length invalid (" << message_length << "): " << le.what() << std::endl;
 		return;
@@ -187,7 +187,7 @@ void client_mgr::receive()
 	{
 		player_leave_msg pl{};
 		data_stream.read(reinterpret_cast<char*>(&pl.msg), remaining_length);
-			
+
 		if (player_iterator != players_.end())
 		{
 			client* cli = &player_iterator->second;
@@ -227,7 +227,7 @@ void client_mgr::input()
 
 		if (com.empty())
 			return;
-		
+
 		if (com[0] == "exit")
 		{
 			is_running_ = false;
@@ -235,14 +235,14 @@ void client_mgr::input()
 		else if (com[0] == "move")
 		{
 			int m_count = 1;
-			
+
 			if (com.size() == 3)
 			{
 				try
 				{
 					m_count = std::stoi(com[2]);
 				}
-				catch (std::invalid_argument& e)
+				catch (std::invalid_argument & e)
 				{
 					std::cout << "Invalid move count [move 'direction' ('count')]" << std::endl;
 					return;
@@ -255,7 +255,7 @@ void client_mgr::input()
 				if (dir != none)
 					move(dir, m_count);
 			}
-			else 
+			else
 				std::cout << "Invalid command syntax [move 'direction' ('count')]" << std::endl;
 		}
 	}
@@ -269,13 +269,13 @@ void client_mgr::move(const directions dir, const int count)
 	const auto it = players_.find(id_);
 	if (it == players_.end())
 		return;
-	
+
 	for (int i = 0; i < count; i++)
 	{
-		
+
 		// Hold until update thread is ready for new message
-		while (state_ != waiting) { }
-		
+		while (state_ != waiting) {}
+
 		coordinate cord = it->second.position;
 		cord.x += (dir == right) - (dir == left);
 		cord.y += (dir == down) - (dir == up);
@@ -317,20 +317,20 @@ void client_mgr::draw() const
 		for (auto it = players_.begin(); it != players_.end(); ++it)
 		{
 			const client* cli = &it->second;
-			
+
 			draw_packet pixel
 			{
 				swap_endian<int>(cli->position.x + 100),
 				swap_endian<int>(cli->position.y + 100),
 				swap_endian<int>((cli->get_rgb()))
 			};
-			
+
 			socket.send_to(asio::buffer(&pixel, sizeof draw_packet), receiver_endpoint);
 		}
 
 		socket.close();
 	}
-	catch (asio::system_error& e)
+	catch (asio::system_error & e)
 	{
 		std::cout << "Draw error: " << e.what() << std::endl;
 	}
