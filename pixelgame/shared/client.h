@@ -4,26 +4,28 @@
 
 struct client
 {
-	client(): position(), form(), desc() { }
+	client(): id(), seq_no(), position(), form(), desc() { }
 
 	client(std::string& name, const object_form form, const object_desc desc)
-		: position(), form(form), desc(desc)
+		: id(), seq_no(), position(), form(form), desc(desc)
 	{
 		name.copy(this->name, name.size());
 	}
 
 	explicit client(new_player_msg& msg)
-	: position(), form(msg.form), desc(msg.desc)
+	: id(msg.msg.head.id), seq_no(msg.msg.head.seq_no), position(), form(msg.form), desc(msg.desc)
 	{
 		std::memcpy(name, msg.name, max_name_len);
 	}
 
-	explicit client(join_msg& msg)
-		: position(), form(msg.form), desc(msg.desc)
+	explicit client(join_msg& msg, const unsigned int id, coordinate pos)
+		: id(id), seq_no(1), position(pos), form(msg.form), desc(msg.desc)
 	{
 		std::memcpy(name, msg.name, max_name_len);
 	}
 
+	unsigned int id;
+	unsigned int seq_no;
 	coordinate position;
 	object_form form;
 	object_desc desc;

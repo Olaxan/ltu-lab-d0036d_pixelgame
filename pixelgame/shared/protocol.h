@@ -1,4 +1,5 @@
 #pragma once
+#include <cmath>
 
 constexpr int max_name_len = 32;
 
@@ -46,6 +47,17 @@ struct coordinate
 {
 	int x;
 	int y;
+
+	int dist(const coordinate other) const
+	{
+		return round(sqrt(pow(x - other.x, 2) + pow(y - other.y, 2)));
+	}
+	
+	bool operator < (const coordinate other) const
+	{
+		return memcmp(this, &other, sizeof(coordinate)) > 0;
+		//TODO: Replace with something better.
+	};
 };
 
 struct draw_packet
@@ -58,20 +70,20 @@ struct draw_packet
 // Message head
 enum class msg_type
 {
-	join, // Client joining game at server
-	leave, // Client leaving game
-	change, // Information to clients
-	event, // Information from clients to server
+	join,		 // Client joining game at server
+	leave,		 // Client leaving game
+	change,		 // Information to clients
+	event,		 // Information from clients to server
 	text_message // Send text messages to one or all
 };
 
 // Included first in all messages
 struct msg_head
 {
-	unsigned int length; // Total length for whole message
-	unsigned int seq_no; // Sequence number
-	unsigned int id; // Client ID or 0;
-	msg_type type; // Type of message
+	unsigned int length;	// Total length for whole message
+	unsigned int seq_no;	// Sequence number
+	unsigned int id;		// Client ID or 0;
+	msg_type type;			// Type of message
 };
 
 // Message type Join (Client -> Server)

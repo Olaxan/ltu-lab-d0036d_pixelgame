@@ -22,7 +22,9 @@ enum class socket_state
 	header_received,
 	message_received,
 	hold,
-	idle
+	idle,
+	closing,
+	closed
 };
 
 class client_mgr

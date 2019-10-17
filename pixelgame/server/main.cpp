@@ -16,27 +16,163 @@
 constexpr unsigned int port_range_begin = 49152;
 constexpr unsigned int port_range_end = 49160;
 constexpr unsigned int max_clients = 64;
+constexpr unsigned int max_move_dist = 2;
 constexpr unsigned int buffer_size = 1024;
 
-unsigned int id = 4;
+unsigned int next_id = 4;
 std::map<unsigned int, client> players;
-std::map<unsigned int, unsigned int> sequence;
+std::map<unsigned int, int> sockets;
+std::map<coordinate, unsigned int> board;
 
-int summary(int socket_descriptor)
+int summary(const unsigned int id) noexcept
 {
-	char bytes[players.size() * (sizeof(new_player_msg) + sizeof(new_player_position_msg))];
 	
-	for (const auto& player : players)
+	const auto cli_it = players.find(id);
+	if (cli_it == players.end())
+		return -1;
+
+	client* target = &cli_it->second;
+
+	int byte_count = 0;
+	for (auto it = players.begin(); it != players.end(); ++it)
 	{
+		client* player = &it->second;
+		
 		new_player_msg first
 		{
 			change_msg
 			{
-				msg_head {sizeof(change_msg), change_type(change_type::new_player)},
-				
+				msg_head {sizeof(new_player_msg), target->seq_no, id, msg_type::change },
+				change_type::new_player
+			}, player->desc, player->form
+		};
+		memcpy(first.name, player->name, max_name_len);
+		target->seq_no++;
+		
+		new_player_position_msg second
+		{
+			change_msg
+			{
+				msg_head {sizeof(new_player_position_msg), target->seq_no, id, msg_type::change },
+				change_type::new_player_position
+			}, player->position
+		};
+		target->seq_no++;
+
+		byte_count += send(sockets[id], &first, sizeof(new_player_msg), 0);
+		byte_count += send(sockets[id], &second, sizeof(new_player_position_msg), 0);
+	}
+
+	return byte_count;
+}
+
+int broadcast(const unsigned int join_id, const change_type type) noexcept
+{
+	const auto cli_it = players.find(join_id);
+	if (cli_it == players.end())
+		return -1;
+
+	client* player = &cli_it->second;
+
+	int byte_count = 0;
+	for (auto it = players.begin(); it != players.end(); ++it)
+	{
+		const int id = it->second.id;
+		if (id == 0)
+			continue;
+
+		switch (type)
+		{
+		case change_type::new_player:
+		{
+			new_player_msg msg
+			{
+				change_msg
+				{
+					msg_head {sizeof(new_player_msg), it->second.seq_no++, join_id, msg_type::change },
+					change_type::new_player
+				}, player->desc, player->form
+			};
+			memcpy(msg.name, player->name, max_name_len);
+
+			byte_count += send(sockets[id], &msg, sizeof(new_player_msg), 0);
+			break;
+		}
+		case change_type::player_leave:
+		{
+			player_leave_msg msg
+			{
+				change_msg
+				{
+					msg_head {sizeof(player_leave_msg), it->second.seq_no++, join_id, msg_type::change },
+					change_type::player_leave
+				}
+			};
+
+			byte_count += send(sockets[id], &msg, sizeof(player_leave_msg), 0);
+			break;
+		}
+		case change_type::new_player_position:
+		{
+			new_player_position_msg msg
+			{
+				change_msg
+				{
+					msg_head {sizeof(new_player_position_msg), it->second.seq_no++, join_id, msg_type::change },
+					change_type::new_player_position
+				}, player->position
+			};
+
+			byte_count += send(sockets[id], &msg, sizeof(new_player_position_msg), 0);
+			break;
+		}
+		default: ;
+		}
+	}
+
+	return -1;
+}
+
+coordinate get_first_free() noexcept
+{
+	coordinate c{ -100, -100 };
+
+	for ( ; c.x < 100; c.x++)
+	{
+		for ( ; c.y < 100; c.y++)
+		{
+			auto it = board.find(c);
+			if (it == board.end())
+			{
+				printf("Location %d, %d is free\n", c.x, c.y);
+				return c;
 			}
 		}
 	}
+
+	printf("Warning - no free space on board \n");
+	return c;
+	//TODO: I guess some error handling if the board actually has 40 000 players simultaneously?
+}
+
+int move(const unsigned int id, const coordinate pos) noexcept
+{
+	auto it = players.find(id);
+	
+	if ((it != players.end()) && (board.find(pos) == board.end()))
+	{
+		client* player = &it->second;
+		const int dist = player->position.dist(pos);
+		
+		if (dist <= max_move_dist && (pos.x >= -100 && pos.x <= 100 && pos.y >= -100 && pos.y <= 100))
+			player->position = pos;
+		else
+			printf("Move invalid: %d, %d -> %d, %d (distance %d) \n", player->position.x, player->position.y, pos.x, pos.y, dist);
+
+		return broadcast(it->first, change_type::new_player_position);
+	}
+
+	return -1;
 }
 
 int main()
@@ -139,9 +275,6 @@ int main()
 			}
 
 			printf("New connection - socket fd %d, ip %s, port %d \n" , new_socket , inet_ntoa(address.sin_addr) , ntohs(address.sin_port));
-			
-			/*if (send(new_socket, &message, sizeof message, 0) != sizeof message)
-				perror("Transmission error");*/
 
 			for (i = 0; i < max_clients; i++)
 			{
@@ -175,7 +308,7 @@ int main()
 				}
 				else if (valread > -1)
 				{
-					printf("Message from %s (%d bytes) \n", inet_ntoa(address.sin_addr), valread);
+					//printf("Message from %s (%d bytes) \n", inet_ntoa(address.sin_addr), valread);
 
 					msg_head head{};
 					std::memcpy(&head, buffer, valread);
@@ -188,14 +321,18 @@ int main()
 							std::memcpy(&msg, buffer, sizeof(join_msg));
 							printf("Player %s joined, desc %d, form %d \n", msg.name, msg.desc, msg.form);
 
-							msg_head response{ sizeof(msg_head), 1, id, msg_type::join };
+							msg_head response{ sizeof(msg_head), 1, next_id, msg_type::join };
 							if (send(sd, &response, sizeof(msg_head), 0) == sizeof(msg_head))
 							{
-								players[id] = client(msg);
-								sequence[id] = 1;
-								id++;
+								coordinate cord = get_first_free();
+								players[next_id] = client(msg, next_id, cord);
+								sockets[next_id] = sd;
+								board[cord] = next_id;
+								summary(next_id);
+								broadcast(next_id, change_type::new_player);
+								broadcast(next_id, change_type::new_player_position);
+								next_id++;
 							}
-							summary(sd);
 							break;
 						}
 						case msg_type::leave:
@@ -205,18 +342,20 @@ int main()
 							auto it = players.find(msg.head.id);
 							if (it != players.end())
 							{
-								printf("Player %s (id %d) disconnected \n", it->second.name, it->first);
-								players.erase(it);
+								const int id = it->second.id;
+								printf("Player %s (id %d) disconnected \n", it->second.name, id);
+								players.erase(id);
+								sockets.erase(id);
+								board.erase(it->second.position);
+								broadcast(id, change_type::player_leave);
 							}
-							break;
-						}
-						case msg_type::change:
-						{
 							break;
 						}
 						case msg_type::event:
 						{
-							break;
+							move_event msg{};
+							std::memcpy(&msg, buffer, sizeof(move_event));
+							move(msg.event.head.id, msg.pos);
 						}
 						case msg_type::text_message:
 						{

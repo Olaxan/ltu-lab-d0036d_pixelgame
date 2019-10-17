@@ -10,11 +10,11 @@ directions client_mgr::get_dir(const std::string& input)
 {
 	if (input == "up")
 		return directions::up;
-	else if (input == "down")
+	if (input == "down")
 		return directions::down;
-	else if (input == "left")
+	if (input == "left")
 		return directions::left;
-	else if (input == "right")
+	if (input == "right")
 		return directions::right;
 
 	return directions::none;
@@ -86,31 +86,38 @@ bool client_mgr::start()
 		// Listen for user input
 		input();
 	}
-
+	
 	try
 	{
 		// Create leave message and send to server
 		// No need to listen for reply
 		std::cout << "Disconnecting..." << std::endl;
-		leave_msg leave{ msg_head{sizeof leave_msg, sequence_, id_, msg_type::leave} };
+		leave_msg leave{ msg_head{sizeof leave_msg, sequence_, id_, msg_type::leave } };
 		endpoint_.send(asio::buffer(&leave, leave.head.length));
 		id_ = sequence_ = 0;
 	}
-	catch (asio::system_error & e) {}
+	catch (asio::system_error & e) { }
 
-	update_listener_.detach();
+	std::this_thread::sleep_for(std::chrono::seconds(1));
+	//TODO: Thread should wait until all data is transmitted, not for a fixed time.
+	
+	state_ = socket_state::closed;
+	endpoint_.close();
+	update_listener_.join();
 	return true;
 }
 
 void client_mgr::update()
 {
-	while (is_running_)
-	{
+	while (is_running_ || state_ == socket_state::closing)
+	{	
 		if (!is_ready())
 			return;
 
 		receive();
 	}
+
+	std::cout << "Update listener terminated successfully" << std::endl;
 }
 
 void client_mgr::receive()
@@ -132,7 +139,9 @@ void client_mgr::receive()
 	}
 	catch (asio::system_error & e)
 	{
-		std::cerr << "Header transmission error: " << e.what() << std::endl;
+		if (state_ != socket_state::closed)
+			std::cerr << "Header transmission error: " << e.what() << std::endl;
+		
 		return;
 	}
 	catch (std::length_error & le)
@@ -160,7 +169,8 @@ void client_mgr::receive()
 	}
 	catch (asio::system_error & e)
 	{
-		std::cerr << "Message transmission error: " << e.what() << std::endl;
+		if (state_ != socket_state::closed)
+			std::cerr << "Message transmission error: " << e.what() << std::endl;
 		return;
 	}
 	catch (std::length_error & le)
@@ -230,9 +240,10 @@ void client_mgr::input()
 
 		if (com[0] == "exit")
 		{
+			state_ = socket_state::closing;
 			is_running_ = false;
 		}
-		else if (com[0] == "move")
+		if (com[0] == "move")
 		{
 			int m_count = 1;
 
@@ -259,7 +270,8 @@ void client_mgr::input()
 				std::cout << "Invalid command syntax [move 'direction' ('count')]" << std::endl;
 		}
 		else if (com[0] == "info")
-			std::printf("Sequence %d, id %d\n", sequence_, id_);
+			std::printf("Player: %s (%d, %d), sequence %d, id %d\n", 
+				players_[id_].name, players_[id_].position.x, players_[id_].position.y, sequence_, id_);
 	}
 }
 
